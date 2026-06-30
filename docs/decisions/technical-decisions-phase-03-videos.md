@@ -47,6 +47,7 @@ _Subprojects in scope:_
 **Recommendation:** **Option A (BullMQ + `@nestjs/bullmq`)** — video transcoding/thumbnailing is BullMQ's canonical use case; the official Nest package, built-in backoff/retry/DLQ, job progress, and Bull Board match exactly what TD-08's failure handling needs. The cost is one extra Compose service (Redis), which is standard and cheap. **If avoiding new infrastructure is the priority, Option B (pg-boss) is the strong alternative** — it reuses PostgreSQL and simplifies the Compose/test surface, at the cost of weaker tooling and a hand-rolled Nest integration.
 
 **Decision:** A (BullMQ + `@nestjs/bullmq`)
+**Libraries:** bullmq, @nestjs/bullmq
 
 ---
 
@@ -73,6 +74,7 @@ _Subprojects in scope:_
 **Recommendation:** **Option A (AWS SDK v3)** — the project explicitly targets "S3 (compatible), MinIO in dev → S3 in prod"; the official S3 SDK is the only option that keeps that swap a config change. Its presigned-multipart support is the foundation TD-03 needs. **Proposed layout (for your review):** a single bucket `videos`, key scheme `videos/{videoId}/original.<ext>` and `videos/{videoId}/thumbnail.jpg`; bucket and endpoint/credentials supplied via env (Joi-validated, Compose service name as host — never `localhost`).
 
 **Decision:** A (AWS SDK v3 — `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner`; single `videos` bucket, `videos/{videoId}/...` keys)
+**Libraries:** @aws-sdk/client-s3, @aws-sdk/s3-request-presigner
 
 ---
 
@@ -196,6 +198,7 @@ _Subprojects in scope:_
 **Recommendation:** **Option A (`nanoid`)** — short, opaque, URL-friendly, and privacy-preserving (important for unlisted videos in Phase 05), stored as a `UNIQUE` column with a regenerate-on-conflict guard. Reversible schemes (B) leak ordering; UUID (C) is too long for a watch URL.
 
 **Decision:** A (`nanoid` stored as a `UNIQUE` column, regenerate-on-conflict)
+**Libraries:** nanoid
 
 ---
 
