@@ -128,7 +128,8 @@ Entregar o domínio de vídeos no `nestjs-project`: armazenamento S3/MinIO, uplo
 
 **Description:** Implementa o serviço e o controller do handshake de upload: `POST /videos` pré-cadastra o rascunho e devolve as URLs presigned das partes; `POST /videos/:id/complete` conclui o multipart, transiciona para `PROCESSING` e enfileira o processamento.
 
-**Test Specs:** _pending /plan-test-specs_
+**Route:** POST /videos
+**Test Specs:** see `nestjs-project/specs/videos-upload.plan.md`
 
 **Technical actions:**
 
@@ -190,7 +191,8 @@ E2E dos endpoints (`POST /videos`, `POST /videos/:id/complete`) são autorados p
 
 **Description:** Expõe a leitura pública do vídeo: metadados/status, streaming via redirect para URL presigned (storage serve Range/206) com contagem de views, e download como anexo — sempre com os bytes fora da API.
 
-**Test Specs:** _pending /plan-test-specs_
+**Route:** GET /videos/:publicId
+**Test Specs:** see `nestjs-project/specs/videos-delivery.plan.md`
 
 **Technical actions:**
 
