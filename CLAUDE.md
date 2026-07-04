@@ -23,8 +23,31 @@ See `docs/diagrams/software-arch.mermaid` for the full diagram. Key containers:
 - **Video Worker** (FFmpeg) → consumes jobs from queue, processes videos, updates DB and storage
 - **Database** (PostgreSQL) → users, channels, videos, comments, likes
 - **Object Storage** (S3/MinIO) → video files and thumbnails
-- **Message Queue** (TBD) → video processing job queue
+- **Message Queue** (Redis + BullMQ) → video processing job queue
 - **Email Service** (SMTP) → account confirmation and password recovery
+
+## Videos (Phase 03 — Upload & Processing)
+
+The videos domain lives in `nestjs-project/src/videos/` (`VideosModule`) plus a dedicated worker process. Infra runs in Docker Compose: `redis` (queue), `minio` (S3-compatible storage), and `video-worker` (the FFmpeg consumer) alongside `db`/`mailpit`/`nestjs-api`.
+
+**Upload strategy (up to 10GB, bytes never transit the API):** presigned S3 **multipart** direct-to-storage.
+- `POST /videos` (authenticated, channel owner) — pre-registers the video as `DRAFT`, opens a multipart upload, returns `uploadId`, `partSize` and presigned `parts[]` URLs. The client PUTs each part directly to storage.
+- `POST /videos/:id/complete` (owner) — completes the multipart upload with the part ETags, transitions `DRAFT → PROCESSING`, and enqueues a `video-processing` job.
+
+**Processing (async):** the `video-worker` service (`src/worker.ts` → `WorkerModule`, a standalone Nest context registering the BullMQ `@Processor`) consumes the `video-processing` queue. It downloads the original, runs `ffprobe` (duration + dimensions) and `ffmpeg` (thumbnail frame → `videos/{id}/thumbnail.jpg`), persists the metadata, and transitions `PROCESSING → READY`. Retries follow BullMQ (`attempts: 3`, exponential backoff); once exhausted, the video goes to `ERROR` with `failure_reason`. The consumer is intentionally **not** part of `VideosModule`, so the API process never consumes the queue.
+
+**Status lifecycle:** `DRAFT → PROCESSING → READY | ERROR`.
+
+**Delivery (public; bytes stay off the API):**
+- `GET /videos/:publicId` — metadata + presigned thumbnail URL. Anonymous/non-owners see only `READY`; the owner (optional JWT) sees any status.
+- `GET /videos/:publicId/stream` — `302` redirect to a short-lived presigned GET (storage serves Range/206); increments `views_count`. `409 VIDEO_NOT_READY` if not `READY`.
+- `GET /videos/:publicId/download` — `302` redirect to a presigned GET with `response-content-disposition: attachment`.
+
+**Storage layout:** single bucket `videos`; keys `videos/{id}/original.<ext>` and `videos/{id}/thumbnail.jpg` (internal uuid, never the public id). **URL uniqueness:** each video has a `nanoid` `public_id` (unique column, regenerate-on-conflict).
+
+**Persistence:** the `videos` table (migration `CreateVideos`) — entity `Video` belongs to `Channel` (many-to-one, on delete cascade); columns include `public_id`, `status`, `original_key`, `thumbnail_key`, `duration_seconds`, `width`/`height`, `views_count`, `failure_reason`.
+
+Running the worker locally: `docker compose exec video-worker npm run start:worker:dev` (the Compose service also starts it automatically). See `nestjs-project/CLAUDE.md` for the worker/test caveats.
 
 ## Docker Networking
 
@@ -105,3 +128,8 @@ Skip documentation lookup only for trivial operations such as:
 
 If a library is involved and there is uncertainty, documentation lookup is mandatory.
 If the documentation returned does not match the installed version, flag the discrepancy before proceeding.
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->
