@@ -16,7 +16,7 @@ services:
   db:
     image: postgres:17
     ports:
-      - "5432:5432"
+      - "5434:5432"
     environment:
       - POSTGRES_USER=streamtube
       - POSTGRES_PASSWORD=streamtube
@@ -33,4 +33,33 @@ services:
       - "1025:1025"
       - "8025:8025"
 
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=streamtube
+      - MINIO_ROOT_PASSWORD=streamtube
+
+  video-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: npm run start:worker:dev
+    volumes:
+      - .:/home/node/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
 

@@ -33,7 +33,22 @@ docker compose exec nestjs-api npm run start:dev
 
 Services:
 - `nestjs-api` — NestJS API, port `3000`
-- `db` — PostgreSQL 17, port `5432`, database `streamtube`, user/password `streamtube`
+- `db` — PostgreSQL 17, host port `5434` → container `5432`, database `streamtube`, user/password `streamtube`
+- `redis` — Redis 7 (BullMQ `video-processing` queue), internal only (`redis:6379`)
+- `minio` — S3-compatible object storage for videos/thumbnails, internal only (`minio:9000`)
+- `mailpit` — SMTP capture, UI on `8025`
+- `video-worker` — FFmpeg queue consumer (Phase 03), same image as `nestjs-api`
+
+## Video Worker (Phase 03)
+
+The `video-worker` service runs the FFmpeg processing consumer — a standalone Nest context (`src/worker.ts` → `WorkerModule`) that registers the BullMQ `@Processor`. It uses the **same image** as `nestjs-api` (which now installs `ffmpeg`) and starts via `npm run start:worker:dev` (watch mode). The consumer lives in `WorkerModule`, **not** `VideosModule`, so the API process never consumes the queue.
+
+```bash
+docker compose exec video-worker npm run start:worker:dev   # run/inspect the worker
+docker compose logs video-worker                            # host-side logs
+```
+
+**Test caveat:** the `video-worker` service competes for `video-processing` jobs, which breaks e2e determinism (e.g. the upload e2e asserts the job is still `waiting`). **Stop it before running the test suites:** `docker compose stop video-worker`. The consumer's own logic is exercised by `src/videos/processing/video-processing.consumer.integration-spec.ts` (real Redis + MinIO + FFmpeg), so a running Compose worker is not needed for tests.
 
 All verification and teardown commands run on the **host machine**:
 
